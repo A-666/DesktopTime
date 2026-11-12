@@ -240,25 +240,63 @@ class PositionGrid(QWidget):
 
 
 class MonitorPreview(QWidget):
-    """按真实虚拟桌面比例绘制显示器缩略图，点选目标屏。"""
+    """按真实虚拟桌面比例绘制显示器缩略图，点选目标屏。
+
+    高度不写死：多屏竖排（例如 2 列 × 3 层）时虚拟桌面很高，若固定 170px，
+    每块缩略图会被压到 79×44，里面那行 `1920×1032` 需要 70px 宽，几乎贴边。
+    所以按「最小方块高度不低于 56px」反推需要多高，上限 240px ——
+    层数多就长高一点，层数少（双屏横排）保持原来的 170px 不动。
+    """
     monitorSelected = Signal(int)
+
+    BASE_H = 170          # 常规双屏横排的高度，原来写死的就是它
+    MAX_H = 240           # 上限：再高就会把下面的「显示范围」卡片顶出首屏
+    MIN_BOX_H = 56        # 单块缩略图的期望最小高度
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.monitors = []
         self.selected = 0
         self._rects: list[tuple[int, QRect]] = []
-        self.setFixedHeight(170)
+        self._cur_h = self.BASE_H
+        self.setFixedHeight(self.BASE_H)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def set_monitors(self, monitors) -> None:
         self.monitors = list(monitors)
+        self._apply_height()
         self.update()
 
     def set_selected(self, index: int) -> None:
         self.selected = index
         self.update()
+
+    # ---- 高度自适应 -------------------------------------------------
+    def _preferred_height(self) -> int:
+        """按当前宽度算出「方块不至于太扁」需要的控件高度。"""
+        if not self.monitors:
+            return self.BASE_H
+        vh = max(1, max(m.bottom for m in self.monitors) - min(m.top for m in self.monitors))
+        box_h = max(1, min(m.height for m in self.monitors))
+        area_w = max(10, self.width() - 36)
+        vw = max(1, max(m.right for m in self.monitors) - min(m.left for m in self.monitors))
+        # 先用基准高度试算：宽度受限时（一行很多台）加高也没用，直接保持
+        scale = min(area_w / vw, (self.BASE_H - 36) / vh)
+        if box_h * scale >= self.MIN_BOX_H:
+            return self.BASE_H
+        need_scale = self.MIN_BOX_H / box_h
+        return int(max(self.BASE_H, min(self.MAX_H, need_scale * vh + 36)))
+
+    def _apply_height(self) -> None:
+        h = self._preferred_height()
+        if h != self._cur_h:
+            self._cur_h = h
+            self.setFixedHeight(h)          # 会再触发一次 resizeEvent，高度不变即收敛
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._apply_height()
 
     def paintEvent(self, _event) -> None:
         p = QPainter(self)

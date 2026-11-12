@@ -293,6 +293,36 @@ class TestControllerAndUI(unittest.TestCase):
         self.win.close()
         self.iso.__exit__(None, None, None)
 
+    def test_monitor_preview_grows_for_stacked_layout(self):
+        """回归：多屏竖排时缩略图要长高，不能把方块压扁到看不清。
+
+        6 台 2 列 × 3 层时虚拟桌面很高，固定 170px 会把每块压到 79×44，
+        而块里那行 `1920×1032` 需要 70px 宽 —— 几乎贴边。改为按
+        「方块不低于 56px」反推高度，上限 240px。
+        """
+        from core.monitors import Monitor
+        from ui.widgets import MonitorPreview
+
+        def mk(i, x, y):
+            return Monitor(index=i, name=f"M{i}", left=x, top=y,
+                           right=x + 1920, bottom=y + 1080,
+                           wl=x, wt=y, wr=x + 1920, wb=y + 1032,
+                           dpi=96, primary=(i == 0))
+
+        stacked = MonitorPreview()
+        stacked.resize(680, MonitorPreview.BASE_H)
+        stacked.set_monitors([mk(i, (i % 2) * 1920, (i // 2) * 1080) for i in range(6)])
+        self.assertGreater(stacked.height(), MonitorPreview.BASE_H,
+                           "竖排 3 层应该长高，否则方块被压扁")
+        self.assertLessEqual(stacked.height(), MonitorPreview.MAX_H,
+                             "不得超过上限，否则会把下面的卡片顶出首屏")
+
+        # 常规双屏横排必须保持原高度 —— 不能为了极端场景牺牲默认观感
+        flat = MonitorPreview()
+        flat.resize(680, MonitorPreview.BASE_H)
+        flat.set_monitors([mk(0, 0, 0), mk(1, 1920, 0)])
+        self.assertEqual(flat.height(), MonitorPreview.BASE_H)
+
     def test_seven_pages(self):
         self.assertEqual(self.win.stack.count(), 7)
         self.assertEqual(self.win.nav.count(), 7)
