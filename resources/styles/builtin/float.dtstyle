@@ -1,0 +1,26 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "浮起",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Segoe UI",
+    "size": 64,
+    "weight": "Medium",
+    "color": "#FFFFFF"
+  },
+  "decorations": [
+    {
+      "type": "shadow",
+      "color": "#0B1220",
+      "opacity": 0.5,
+      "offsetX": 0,
+      "offsetY": 10
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "取景",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Consolas",
+    "size": 54,
+    "weight": "Regular",
+    "color": "#FFFFFF"
+  },
+  "decorations": [
+    {
+      "type": "bracket",
+      "width": 2,
+      "length": 44,
+      "color": "auto",
+      "padding": 4
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

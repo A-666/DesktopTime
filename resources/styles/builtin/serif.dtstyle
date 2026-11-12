@@ -1,0 +1,25 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "衬线",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Georgia",
+    "size": 60,
+    "weight": "Regular",
+    "color": "#F7F3EA"
+  },
+  "decorations": [
+    {
+      "type": "divider",
+      "position": "bottom",
+      "width": 1,
+      "color": "auto"
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

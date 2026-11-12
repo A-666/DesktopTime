@@ -1,0 +1,18 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "极简",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Consolas",
+    "size": 60,
+    "weight": "Regular",
+    "color": "#F2F5F8"
+  },
+  "decorations": [],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

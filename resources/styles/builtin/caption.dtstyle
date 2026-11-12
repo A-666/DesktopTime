@@ -1,0 +1,31 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "字幕",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Segoe UI",
+    "size": 56,
+    "weight": "Medium",
+    "color": "#FFFFFF"
+  },
+  "decorations": [
+    {
+      "type": "shadow",
+      "color": "#000000",
+      "opacity": 0.55,
+      "offsetX": 0,
+      "offsetY": 3
+    },
+    {
+      "type": "outline",
+      "width": 2,
+      "color": "#000000"
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

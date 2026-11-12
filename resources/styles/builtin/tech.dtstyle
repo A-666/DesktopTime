@@ -1,0 +1,32 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "科技",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Cascadia Code",
+    "size": 58,
+    "weight": "Medium",
+    "color": "#22C7E8"
+  },
+  "decorations": [
+    {
+      "type": "bracket",
+      "width": 2,
+      "length": 20,
+      "color": "auto",
+      "padding": 10
+    },
+    {
+      "type": "divider",
+      "position": "bottom",
+      "width": 1,
+      "color": "auto"
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

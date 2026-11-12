@@ -1,0 +1,26 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "计时环",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Cascadia Code",
+    "size": 54,
+    "weight": "Medium",
+    "color": "#7CE7FF"
+  },
+  "decorations": [
+    {
+      "type": "ring",
+      "mode": "second",
+      "width": 3,
+      "color": "auto",
+      "trackColor": "auto"
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

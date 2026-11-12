@@ -1,0 +1,25 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "终端",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Consolas",
+    "size": 58,
+    "weight": "Regular",
+    "color": "#7EE787"
+  },
+  "decorations": [
+    {
+      "type": "divider",
+      "position": "bottom",
+      "width": 2,
+      "color": "auto"
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

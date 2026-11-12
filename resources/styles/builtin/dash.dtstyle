@@ -1,0 +1,26 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "虚线",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Consolas",
+    "size": 56,
+    "weight": "Regular",
+    "color": "#E6EDF3"
+  },
+  "decorations": [
+    {
+      "type": "border",
+      "style": "dashed",
+      "width": 1,
+      "color": "auto",
+      "padding": 14
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

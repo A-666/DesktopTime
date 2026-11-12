@@ -1,0 +1,19 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "电子表",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "segments",
+  "segmentGhost": "",
+  "text": {
+    "font": "Consolas",
+    "size": 64,
+    "weight": "Regular",
+    "color": "#8AE99B"
+  },
+  "decorations": [],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

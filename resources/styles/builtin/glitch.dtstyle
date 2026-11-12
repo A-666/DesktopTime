@@ -1,0 +1,33 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "故障",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Bahnschrift",
+    "size": 58,
+    "weight": "Bold",
+    "color": "#FFFFFF"
+  },
+  "decorations": [
+    {
+      "type": "shadow",
+      "color": "#FF2D55",
+      "opacity": 1.0,
+      "offsetX": -4,
+      "offsetY": 0
+    },
+    {
+      "type": "shadow",
+      "color": "#00E5FF",
+      "opacity": 1.0,
+      "offsetX": 4,
+      "offsetY": 0
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

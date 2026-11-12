@@ -1,0 +1,24 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "墨字",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Segoe UI",
+    "size": 56,
+    "weight": "Medium",
+    "color": "#14181F"
+  },
+  "decorations": [
+    {
+      "type": "outline",
+      "width": 2,
+      "color": "#FFFFFF"
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

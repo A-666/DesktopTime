@@ -1,0 +1,22 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "指针",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "analog",
+  "face": {
+    "fill": "#FFFFFF",
+    "opacity": 0.0
+  },
+  "text": {
+    "font": "Segoe UI",
+    "size": 72,
+    "weight": "Regular",
+    "color": "#F2F5F8"
+  },
+  "decorations": [],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

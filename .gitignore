@@ -1,0 +1,25 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# --- 构建产物 ---
+build/
+dist/
+*.pdb
+build.log
+DesktopTime.spec.bak
+
+# --- 运行时数据（配置 / 日志不随仓库走）---
+settings.json
+*.dtconfig.bak
+*.log
+logs/
+
+# --- 系统 ---
+.DS_Store
+Thumbs.db
+desktop.ini

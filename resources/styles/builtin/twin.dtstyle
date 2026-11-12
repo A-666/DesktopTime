@@ -1,0 +1,31 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "双线",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Bahnschrift",
+    "size": 56,
+    "weight": "Medium",
+    "color": "#FFFFFF"
+  },
+  "decorations": [
+    {
+      "type": "divider",
+      "position": "top",
+      "width": 1,
+      "color": "auto"
+    },
+    {
+      "type": "divider",
+      "position": "bottom",
+      "width": 1,
+      "color": "auto"
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

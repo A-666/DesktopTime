@@ -1,0 +1,25 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "琥珀",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Consolas",
+    "size": 58,
+    "weight": "Medium",
+    "color": "#FFC178"
+  },
+  "decorations": [
+    {
+      "type": "glow",
+      "color": "auto",
+      "radius": 8,
+      "opacity": 0.25
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "翻页",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "flip",
+  "card": {
+    "fill": "none",
+    "edge": "auto",
+    "radius": 10
+  },
+  "text": {
+    "font": "Segoe UI",
+    "size": 60,
+    "weight": "Bold",
+    "color": "#F2F5F8"
+  },
+  "decorations": [],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

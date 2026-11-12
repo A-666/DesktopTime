@@ -1,0 +1,38 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "炫彩",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "text",
+  "text": {
+    "font": "Bahnschrift",
+    "size": 60,
+    "weight": "Bold",
+    "color": "#A78BFA"
+  },
+  "decorations": [
+    {
+      "type": "shadow",
+      "color": "#FF2D55",
+      "opacity": 1.0,
+      "offsetX": -4,
+      "offsetY": 0
+    },
+    {
+      "type": "shadow",
+      "color": "#22D3EE",
+      "opacity": 1.0,
+      "offsetX": 4,
+      "offsetY": 4
+    },
+    {
+      "type": "outline",
+      "width": 2,
+      "color": "#FF2D95"
+    }
+  ],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}

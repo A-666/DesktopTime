@@ -1,0 +1,18 @@
+{
+  "schema": "desktoptime.style/v1",
+  "name": "点阵",
+  "author": "Clear",
+  "version": "1.0.0",
+  "render": "dots",
+  "text": {
+    "font": "Segoe UI",
+    "size": 64,
+    "weight": "Bold",
+    "color": "#5B8CFF"
+  },
+  "decorations": [],
+  "effects": [],
+  "bg": {
+    "enabled": false
+  }
+}
