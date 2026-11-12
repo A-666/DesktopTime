@@ -2,7 +2,7 @@
 """黑白 IDE 风共用控件：卡片、开关行、16 色点选色板、九宫格、显示器缩略图等。"""
 from __future__ import annotations
 
-from PySide6.QtCore import QRect, Qt, Signal
+from PySide6.QtCore import QEvent, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (QAbstractButton, QColorDialog, QDialog, QFrame, QGridLayout,
                                QHBoxLayout, QLabel, QPushButton, QSizePolicy,
@@ -362,6 +362,8 @@ class PresetCard(QFrame):
         self.key = key
         self.setObjectName("preset")
         self.setFixedHeight(self.HEIGHT)
+        # 宽度全交给网格均分：竖向固定（104 是死数），横向可被拉满
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(8, 8, 8, 8)
@@ -380,12 +382,25 @@ class PresetCard(QFrame):
         self.preview = QLabel()
         self.preview.setObjectName("presetpreview")
         self.preview.setFixedHeight(54)
+        # 横向 Ignored 是关键：否则缩略图的像素宽度会反推卡片 sizeHint，
+        # 各预设图宽不同 → 列宽跟着图走，20 张卡就宽窄不一了。
+        self.preview.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview.installEventFilter(self)
         lay.addWidget(self.preview)
 
         self._src_pix = None
 
         self.set_active(False)
+
+    def eventFilter(self, obj, event) -> bool:
+        # 缩略图每换一次宽度就按原始图重新等比缩放。
+        # 只靠卡片的 resizeEvent 不够：卡片先拿到新宽度、标签后重排，
+        # 那一步会读到上一轮的旧宽度，图比标签大时 QLabel 直接居中裁切
+        # （计时环的圆、虚线的框被切掉半边的老坑就是这么来的）。
+        if obj is self.preview and event.type() == QEvent.Type.Resize:
+            self._apply_preview()
+        return super().eventFilter(obj, event)
 
     def set_preview(self, pixmap) -> None:
         # 原始图缓存起来，按标签实际宽度重缩放 —— 缩略图比标签宽时 QLabel 只会居中裁切，

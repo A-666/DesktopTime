@@ -275,7 +275,9 @@ class Page03Style(BasePage):
         card = self.card("样式预设")
         holder = QWidget()
         grid = QGridLayout(holder)
-        grid.setContentsMargins(0, 0, 0, 0)
+        # 右侧留 8px（= 列间距）：否则第 4 列的边框正好压在视口边缘、紧贴滚动条，
+        # 看着像被裁了一刀
+        grid.setContentsMargins(0, 0, 8, 0)
         grid.setSpacing(8)
         self.cards: list[PresetCard] = []
         for i, (key, title, badge) in enumerate(self.PRESET_CARDS):
@@ -283,8 +285,16 @@ class Page03Style(BasePage):
             pc.clicked.connect(self.c.set_preset)
             grid.addWidget(pc, i // 4, i % 4)
             self.cards.append(pc)
-        # 尾列吃掉多余宽度，否则 4 列会被拉散成大片空隙
-        grid.setColumnStretch(4, 1)
+        # 4 列必须等宽：卡宽只由「列宽均分」决定，不能跟着各自的标题长度、
+        # 缩略图像素宽度跑。原来只给尾列 stretch、前 4 列按 sizeHint 分配，
+        # 实测出来是 128/157/144/176 四种宽，肉眼一眼就看出列不齐。
+        # 下限取全表最宽的 minimumSizeHint（≈ 标题 + 副标），窄窗口下才不会被挤到裁字。
+        # 注：均分是整数分配，窗口拖到最小时会余 1~2px（136/137 交替），肉眼不可辨；
+        # 要绝对等宽得按视口宽度算死每张卡的 setFixedWidth，反而更容易出 bug。
+        col_min = max(pc.minimumSizeHint().width() for pc in self.cards)
+        for col in range(4):
+            grid.setColumnMinimumWidth(col, col_min)
+            grid.setColumnStretch(col, 1)
         # 20 套预设 = 5 行；固定只露两行、其余交给滚动条，
         # 免得下面的「文字 / 颜色 / 效果」被推到很远的地方。
         scroll = QScrollArea()

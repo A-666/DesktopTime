@@ -440,6 +440,33 @@ class TestControllerAndUI(unittest.TestCase):
         self.assertEqual(len(boxes), 1)
         self.assertEqual(boxes[0].height(), PresetCard.HEIGHT * 2 + 10)
 
+    def test_style_cards_are_same_size(self):
+        """回归：20 张样式卡的宽高必须一致。
+
+        原来网格只给「尾列」设了 stretch，前 4 列各按自己的 sizeHint 分配，
+        而 sizeHint 又被标题文字和缩略图像素宽度撑 —— 实测出 128/157/144/176
+        四种列宽，用户一眼就看出列不齐。现在 4 列均分，卡宽只由视口宽度决定。
+        """
+        from ui.widgets import PresetCard
+        self.win.nav.setCurrentRow(2)
+        page = self.win.pages[2]
+        self.win.show()
+        try:
+            for win_w in (1000, 1280):
+                self.win.resize(win_w, 720)
+                for _ in range(4):
+                    self.win.layout().activate()
+                    page.layout().activate()
+                    app.processEvents()
+                widths = {c.width() for c in page.cards}
+                heights = {c.height() for c in page.cards}
+                self.assertEqual(heights, {PresetCard.HEIGHT}, f"{win_w}: 高度不齐")
+                # 均分是整数分配，窄窗口下允许 1px 取整差，但不能出现 2px 以上的差
+                self.assertLessEqual(max(widths) - min(widths), 1,
+                                     f"{win_w}: 宽度差 {max(widths) - min(widths)}px {sorted(widths)}")
+        finally:
+            self.win.hide()
+
     def test_reset_keeps_profiles(self):
         self.c.save_profile("保留我")
         self.c.set("style.color", "#C9413A")
