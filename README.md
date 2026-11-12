@@ -4,7 +4,7 @@ Windows 桌面悬浮时钟。多显示器、九宫格预设位置、20 套内置
 
 基于 **Python 3.12 + PySide6**，界面为黑白 IDE 风（两层底色、零圆角、彩色只表达状态）。
 
-![桌面时钟](docs/clock.png)
+![DesktopTime：两台显示器上的悬浮时钟](docs/hero.png)
 
 ## 特性
 
