@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
+import traceback
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -176,20 +178,57 @@ def _cli_command(argv: list[str]) -> str | None:
     return None
 
 
-def _hard_exit(code: int) -> None:
-    """绕过解释器析构阶段直接结束进程。
+def _flush_streams() -> None:
+    """刷标准流，且必须容忍它们是 None。
 
-    PySide6 + PyInstaller onefile 在退出时会按任意顺序析构 QSystemTrayIcon /
-    QLocalServer / QMenu，偶发析构阻塞 —— 表现就是「点了退出，任务管理器里
-    进程还在」，用户只能手动结束。配置已落盘、日志已 flush 之后，
-    进程状态已没有需要保留的东西，硬退出在语义上是等价且确定的。
+    `console=False` 的冻结产物在**没有控制台**启动时（资源管理器双击、计划任务、
+    另一台机器上从 Release 解压运行），`sys.stdout` / `sys.stderr` 都是 None。
+    直接 `.flush()` 抛的是 `AttributeError`，它不是 `OSError`，旧代码的
+    `except (OSError, ValueError)` 兜不住，异常一路冲出 `main()`，被 PyInstaller
+    引导器接住后弹「Unhandled exception in script」，进程还得等用户点关闭才死。
+    从命令行/带重定向启动时句柄有效、流不是 None，所以这个坑只在双击时出现 ——
+    自动化脚本用 `stdout=DEVNULL` 启动永远测不出来。
     """
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name, None)
+        if stream is None:
+            continue
+        try:
+            stream.flush()
+        except (OSError, ValueError):
+            pass
+
+
+def _log_unhandled(exc_type, exc, tb) -> None:
+    """未捕获异常只写日志，绝不把 traceback 甩给用户看。"""
     try:
-        sys.stdout.flush()
-        sys.stderr.flush()
-    except (OSError, ValueError):
+        text = "".join(traceback.format_exception(exc_type, exc, tb))
+        store.log(f"未捕获异常：\n{text}", "ERROR")
+    except Exception:      # 日志本身失败也不能再引发二次异常
         pass
+
+
+def _hard_exit(code: int) -> None:
+    """立即结束进程，不做任何析构（用于还没有 Qt 对象、或已确认无救的场合）。"""
+    _flush_streams()
     os._exit(code)
+
+
+def _exit_with_watchdog(code: int, timeout: float = 2.5) -> None:
+    """先给解释器一次体面收尾的机会，卡死再硬杀。
+
+    为什么不能直接 `os._exit`：事件循环跑完之后 Qt 的托盘、窗口、内部线程都还活着，
+    此时 `os._exit`（即 ExitProcess）会在别的线程还在跑的时候强拆 DLL —— 实测退出码
+    变成 `0xC0000005`（访问冲突）。进程是没了、用户也看不出来，但 Windows 事件日志
+    里会记一条应用错误，某些杀软会据此报毒，属于「能收场但脏」。
+
+    也不能纯靠正常返回：PySide6 + onefile 的析构顺序不确定，历史上就是它会卡住，
+    表现成「点了退出进程还在」。所以两头都要 —— 正常走解释器收尾拿到 rc=0，
+    再用一个 daemon 定时器兜底；正常情况它永远不触发，真卡死了它替我们把进程收掉。
+    """
+    timer = threading.Timer(timeout, lambda: (_flush_streams(), os._exit(code)))
+    timer.daemon = True
+    timer.start()
 
 
 def main() -> int:
@@ -248,18 +287,26 @@ def main() -> int:
             store.log(f"托盘启动提示失败: {exc}", "WARN")
 
     rc = app.exec()
-    # 走到这里说明事件循环已退出：先把去抖中的配置补写，再硬退出
+    # 走到这里说明事件循环已退出：先把去抖中的配置补写，再体面退出（带看门狗兜底）
     store.log(f"事件循环结束 rc={rc}，进程退出")
     controller.flush_pending()
-    _hard_exit(0)
-    return 0  # 不会执行，保留让类型检查通过
+    _exit_with_watchdog(0)
+    return 0  # 正常收尾时从这里返回，让解释器把 rc=0 交回引导器
 
 
 if __name__ == "__main__":
+    # Qt 槽里漏出的异常先交给 excepthook 记账，不让它冒到引导器变成弹窗
+    sys.excepthook = _log_unhandled
     try:
         sys.exit(main())
     except SystemExit:
         raise
+    except BaseException:                  # noqa: BLE001 —— 兜底必须最宽
+        # 任何漏网异常都在这里收口：写日志 + 硬退出。
+        # 否则 PyInstaller 引导器会弹「Unhandled exception in script」，
+        # 而那个弹窗是阻塞的，用户不点关闭进程就一直挂着。
+        _log_unhandled(*sys.exc_info())
+        _hard_exit(1)
     except Exception as exc:  # 启动期异常留痕，避免无窗口静默退出
         store.log(f"启动失败: {type(exc).__name__}: {exc}", "ERROR")
         raise

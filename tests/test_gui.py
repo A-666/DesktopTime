@@ -230,6 +230,34 @@ class TestRenderer(unittest.TestCase):
             cb = (min(a for a, _ in bot) + max(b for _, b in bot)) / 2
             self.assertLessEqual(abs(cb - ct), 3, f"{key} 日期行偏离中线 {cb - ct:+.1f}px")
 
+    def test_flush_tolerates_missing_streams(self):
+        """回归：`console=False` 双击启动时 sys.stdout / sys.stderr 都是 None。
+
+        旧实现 `sys.stdout.flush()` 直怼，抛的是 AttributeError，而 except 只兜
+        (OSError, ValueError) —— 异常冲出 main() 后被 PyInstaller 引导器接住，
+        弹「Unhandled exception in script」，且弹窗阻塞，进程要等用户点关闭才死。
+        """
+        import app as entry            # 入口模块，导入即完成 Qt 路径补全
+
+        saved = sys.stdout, sys.stderr
+        try:
+            sys.stdout = None
+            sys.stderr = None
+            entry._flush_streams()     # 不得抛异常
+        finally:
+            sys.stdout, sys.stderr = saved
+
+        # 有正常流时也不能吞掉真实错误：关闭的流要照旧安静
+        class ClosedIO:
+            def flush(self):
+                raise ValueError("I/O operation on closed file")
+
+        try:
+            sys.stdout, sys.stderr = ClosedIO(), ClosedIO()
+            entry._flush_streams()
+        finally:
+            sys.stdout, sys.stderr = saved
+
     def test_ring_track_follows_text_color(self):
         """计时环：弧与轨道都写 auto，轨道自动降透明度但同色系。"""
         pack = stylepack.get_builtin("ring")
