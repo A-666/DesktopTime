@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any
 
 SCHEMA = "desktoptime.config/v1"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 
 POSITION_PRESETS = (
     "top-left", "top", "top-right",
