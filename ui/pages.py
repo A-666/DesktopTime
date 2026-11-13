@@ -17,7 +17,8 @@ from core.renderer import Renderer
 from core.settings import APP_VERSION, TEXT_STYLES
 from .theme import CARD, LINE
 from .widgets import (Card, ColorPalette, ConfirmDialog, FeedbackBar, Hint,
-                      MonitorPreview, PositionGrid, PresetCard, SectionTitle, SwitchRow)
+                      MonitorPicker, MonitorPreview, PositionGrid, PresetCard, SectionTitle,
+                      SwitchRow)
 
 TEXT_STYLE_LABELS = {"bold": "加粗", "italic": "斜体", "underline": "下划线",
                      "outline": "描边", "shadow": "阴影"}
@@ -107,6 +108,7 @@ class BasePage(QWidget):
         controller.settingsChanged.connect(self.on_external_change)
         controller.profilesChanged.connect(self.on_profiles_changed)
         controller.monitorsChanged.connect(self.on_monitors_changed)
+        controller.editTargetChanged.connect(self.on_edit_target)
         self.sync_all()
 
     # 焦点控件不同步，避免正在输入时被 setText 打断光标
@@ -134,6 +136,10 @@ class BasePage(QWidget):
     def on_monitors_changed(self) -> None:
         pass
 
+    def on_edit_target(self, _index: int) -> None:
+        """03 / 04 页换了编辑对象：整页按新屏的配置重刷一次。"""
+        self.sync_all()
+
     def card(self, title: str) -> Card:
         card = Card()
         card.add(SectionTitle(title))
@@ -148,7 +154,7 @@ class Page01Display(BasePage):
     def build(self) -> None:
         card = self.card("显示器布局")
         self.preview = MonitorPreview()
-        self.preview.monitorSelected.connect(lambda i: self.c.set("display.index", i))
+        self.preview.monitorSelected.connect(self._pick_monitor)
         card.add(self.preview)
         self.info = Hint("")
         card.add(self.info)
@@ -172,7 +178,10 @@ class Page01Display(BasePage):
 
     def sync_all(self) -> None:
         self.preview.set_monitors(self.c.monitors)
-        self.preview.set_selected(int(self.c.get("display.index", 0)))
+        # 多屏模式下高亮的应该是「正在编辑的那台」，否则 01 页亮 A、03 页在改 B
+        selected = (self.c.edit_index() if self.c.get("display.all", False)
+                    else int(self.c.get("display.index", 0)))
+        self.preview.set_selected(selected)
         # 只留「序号 / 分辨率·缩放 / 主副屏」，不显示 \\.\DISPLAY1 这类设备路径：
         # 对用户没有决策价值，还会把这一行挤到折行。
         lines = [f"检测到 {len(self.c.monitors)} 台显示器"]
@@ -186,6 +195,11 @@ class Page01Display(BasePage):
 
     def on_monitors_changed(self) -> None:
         self.sync_all()
+
+    def _pick_monitor(self, index: int) -> None:
+        """点缩略图选屏：时钟挪过去，03 / 04 页的编辑对象也跟着挪。"""
+        self.c.set("display.index", index)
+        self.c.set_edit_index(index)
 
 
 class Page02Time(BasePage):
@@ -272,6 +286,9 @@ class Page03Style(BasePage):
         super().__init__(c, "03  外观样式")
 
     def build(self) -> None:
+        # 选屏放在最上面：它决定了这一页在编辑谁，下面的控件全跟着它走
+        self.picker = MonitorPicker(self.c)
+        self.lay.insertWidget(2, self.picker)
         card = self.card("样式预设")
         holder = QWidget()
         grid = QGridLayout(holder)
@@ -463,6 +480,7 @@ class Page03Style(BasePage):
             f"特效 {len(self.c.pack.get('effects', []))}")
 
     def sync_all(self) -> None:
+        self.picker.sync()
         preset = str(self.c.get("style.preset", "minimal"))
         has_pack = bool(self.c.get("style.packRef", ""))
         for pc in self.cards:
@@ -488,6 +506,8 @@ class Page04Position(BasePage):
         super().__init__(c, "04  位置布局")
 
     def build(self) -> None:
+        self.picker = MonitorPicker(self.c)
+        self.lay.insertWidget(2, self.picker)
         card = self.card("预设位置")
         self.grid = PositionGrid()
         # 九宫格是「相对桌面的固定锚点」：点一下即回到预设模式，不吃任何偏移量
@@ -540,9 +560,12 @@ class Page04Position(BasePage):
         """手改 X/Y = 用自定义落点覆盖位置；预设锚点本身不动。"""
         dx = int(self.cx.value() if x is None else x)
         dy = int(self.cy.value() if y is None else y)
-        self.c.set_custom_position(int(self.c.get("display.index", 0)), dx, dy)
+        # 落到「当前编辑的那台屏」上：单屏模式它等于 display.index，
+        # 多屏模式才可能指向别的屏（否则改的是看不见的那台）
+        self.c.set_custom_position(self.c.edit_index(), dx, dy)
 
     def sync_all(self) -> None:
+        self.picker.sync()
         # 预设模式下九宫格高亮；自定义模式下不高亮任何格子（一眼看出当前不是预设位）
         preset_mode = str(self.c.get("position.mode", "preset")) == "preset"
         self.grid.set_current(self.c.get("position.preset", "top-right") if preset_mode else "")

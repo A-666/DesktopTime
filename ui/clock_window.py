@@ -40,7 +40,7 @@ class ClockWindow(QWidget):
         self.show()
 
     def _apply_flags(self) -> None:
-        cfg = self.controller.data()
+        cfg = self.cfg()
         flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
         if cfg["window"]["alwaysOnTop"]:
             flags |= Qt.WindowType.WindowStaysOnTopHint
@@ -50,6 +50,10 @@ class ClockWindow(QWidget):
         self.setWindowFlags(flags)
         if was_visible:
             self.show()
+
+    def cfg(self) -> dict:
+        """本窗口所在显示器实际生效的配置（全局 + 该屏的独立样式/位置）。"""
+        return self.controller.config_for(self._target_index())
 
     def on_settings_changed(self, path: str, _value) -> None:
         if path.startswith(("window.", "display.", "position.")):
@@ -81,9 +85,10 @@ class ClockWindow(QWidget):
     def on_tick(self, now_ms: int) -> None:
         self._now_ms = now_ms
         try:
+            idx = self._target_index()
             img = self.controller.renderer.render(
-                datetime.now(), self.controller.data(), self.controller.pack,
-                now_ms, self._dpr
+                datetime.now(), self.controller.config_for(idx),
+                self.controller.pack_for(idx), now_ms, self._dpr
             )
         except Exception as exc:  # 渲染层任何异常都不允许拖垮应用
             store.log(f"渲染失败: {exc}", "ERROR")
@@ -107,7 +112,7 @@ class ClockWindow(QWidget):
         """全部在 Qt 逻辑(DIP)坐标系计算，避免物理坐标被 dpr 二次缩放。"""
         if self._image is None or not self.controller.monitors:
             return
-        cfg = self.controller.data()
+        cfg = self.cfg()
         monitors = self.controller.monitors
         # 时间文本 + 装饰留白的实际窗口尺寸（逻辑像素）
         w, h = self.width(), self.height()
@@ -158,7 +163,7 @@ class ClockWindow(QWidget):
         if self._drag_offset is None:
             return
         self._drag_offset = None
-        if self.controller.get("position.lockPosition", False):
+        if self.cfg()["position"]["lockPosition"]:
             self._reposition()
             return
         self.commit_current_position()

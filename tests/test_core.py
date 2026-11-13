@@ -86,6 +86,40 @@ class TestSettings(unittest.TestCase):
         self.assertEqual(data["position"]["preset"], POSITION_PRESETS[0])
         self.assertEqual(data["tray"]["onClose"], "minimize")
 
+    def test_per_monitor_roundtrip(self):
+        """每屏配置：缺项按模板补齐，范围照旧收敛，键就是显示器序号。"""
+        data, _ = coerce({"perMonitor": {
+            "1": {"style": {"color": "#ABCDEF", "size": 999}},
+            "0": {"position": {"margin": -5, "preset": "bottom-left"}},
+        }})
+        self.assertEqual(sorted(data["perMonitor"]), ["0", "1"])
+        self.assertEqual(data["perMonitor"]["1"]["style"]["color"], "#ABCDEF")
+        self.assertEqual(data["perMonitor"]["1"]["style"]["size"], 200)      # 钳制
+        self.assertEqual(data["perMonitor"]["0"]["position"]["margin"], 0)   # 钳制
+        self.assertEqual(data["perMonitor"]["0"]["position"]["preset"], "bottom-left")
+        # 没写的字段要补成完整的一份，渲染时才不会 KeyError
+        self.assertIn("preset", data["perMonitor"]["1"]["style"])
+        self.assertIn("lockPosition", data["perMonitor"]["1"]["position"])
+
+    def test_per_monitor_drops_bad_keys(self):
+        """非法键 / 越界序号 / 非对象条目一律丢弃，不能让脏配置带崩启动。"""
+        data, warns = coerce({"perMonitor": {
+            "abc": {"style": {}}, "99": {"style": {}}, "2": "not-a-dict",
+            "3": {"style": {"color": "#00FF00"}},
+        }})
+        self.assertEqual(sorted(data["perMonitor"]), ["3"])
+        self.assertTrue(warns)
+
+    def test_per_monitor_not_a_dict(self):
+        data, warns = coerce({"perMonitor": [1, 2, 3]})
+        self.assertEqual(data["perMonitor"], {})
+        self.assertTrue(any("perMonitor" in w for w in warns))
+
+    def test_per_monitor_survives_save_load(self):
+        s = Settings({"perMonitor": {"1": {"style": {"color": "#112233"}}}})
+        again = Settings(s.as_dict())
+        self.assertEqual(again.get("perMonitor.1.style.color"), "#112233")
+
     def test_hex_color(self):
         data, _ = coerce({"style": {"color": "red"}})
         self.assertEqual(data["style"]["color"], "#1F2328")

@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any
 
 SCHEMA = "desktoptime.config/v1"
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.1.0"
 
 POSITION_PRESETS = (
     "top-left", "top", "top-right",
@@ -52,6 +52,8 @@ DEFAULTS: dict[str, Any] = {
         "autoRefresh": True,
         "identifyOnSelect": True,
         "layout": [],
+        # 03 / 04 页正在编辑哪一台显示器（序号 = display.index 同一套主键）
+        "editIndex": 0,
     },
     "time": {
         "format": "HH:mm:ss",
@@ -91,7 +93,14 @@ DEFAULTS: dict[str, Any] = {
     "app": {"autoStart": False},
     "tray": {"enabled": True, "onClose": "ask"},
     "window": {"alwaysOnTop": False, "clickThrough": True, "autoRelocate": True},
+    # 每台显示器的独立样式 / 位置：{"<index>": {"style": {...}, "position": {...}}}
+    # 只在该屏被单独设置过之后才有键；没有键 = 跟随上面这份全局配置。
+    "perMonitor": {},
 }
+
+# perMonitor 里允许出现的字段（其余全局项如时间格式、窗口行为仍然全局共享）
+MONITOR_SECTIONS = ("style", "position")
+MAX_MONITORS = 16
 
 # (min, max, fallback)
 LIMITS: dict[str, tuple[float, float, float]] = {
@@ -210,6 +219,52 @@ def clamp(data: dict[str, Any]) -> list[str]:
     return warnings
 
 
+def clamp_scope(style: dict, position: dict) -> list[str]:
+    """只校验 style / position 两块（perMonitor 的条目用）。
+
+    直接复用主 clamp：临时拼一个「最小完整配置」给它，规则就永远只有一份，
+    不会出现「全局改了范围、每屏配置没跟上」的漂移。
+    """
+    ctx = {"style": style, "position": position, "display": {"layout": []}}
+    return clamp(ctx)
+
+
+def normalize_monitor_entry(entry: Any, path: str = "perMonitor") -> tuple[dict | None, list[str]]:
+    """把「某台显示器的一份覆盖配置」收敛成完整的 style + position。"""
+    if not isinstance(entry, dict):
+        return None, [f"{path}: 期望 object，已丢弃"]
+    warnings: list[str] = []
+    merged = _merge({"style": copy.deepcopy(DEFAULTS["style"]),
+                     "position": copy.deepcopy(DEFAULTS["position"])},
+                    entry, path, warnings)
+    warnings.extend(clamp_scope(merged["style"], merged["position"]))
+    return {"style": merged["style"], "position": merged["position"]}, warnings
+
+
+def normalize_per_monitor(raw: Any, warnings: list[str]) -> dict[str, dict]:
+    """键 = 显示器序号（与 01 页序号一致，就是唯一主键），值 = 该屏的覆盖配置。"""
+    out: dict[str, dict] = {}
+    if raw is None:
+        return out
+    if not isinstance(raw, dict):
+        warnings.append("perMonitor: 期望 object，已清空")
+        return out
+    for key, entry in raw.items():
+        try:
+            idx = int(str(key))
+        except (TypeError, ValueError):
+            warnings.append(f"perMonitor.{key}: 键不是显示器序号，已忽略")
+            continue
+        if not (0 <= idx < MAX_MONITORS):
+            warnings.append(f"perMonitor.{key}: 序号越界，已忽略")
+            continue
+        normalized, warns = normalize_monitor_entry(entry, f"perMonitor.{idx}")
+        warnings.extend(warns)
+        if normalized is not None:
+            out[str(idx)] = normalized
+    return out
+
+
 def _is_hex(v: Any) -> bool:
     if not isinstance(v, str) or not v.startswith("#") or len(v) != 7:
         return False
@@ -233,11 +288,18 @@ def _parent(data: dict, path: str):
 def coerce(raw: Any) -> tuple[dict[str, Any], list[str]]:
     """把任意输入（含损坏 / 旧版 / 残缺 JSON）收敛成完整配置。"""
     warnings: list[str] = []
+    # perMonitor 的键是动态的，_merge 会按 DEFAULTS 的固定键「未知字段一律忽略」，
+    # 所以先摘出来单独归一，再塞回去。
+    per_raw: Any = None
+    if isinstance(raw, dict) and "perMonitor" in raw:
+        raw = dict(raw)
+        per_raw = raw.pop("perMonitor")
     data = _merge(DEFAULTS, raw, "", warnings)
     data["schema"] = SCHEMA
     data["appVersion"] = APP_VERSION
     if not data.get("updatedAt"):
         data["updatedAt"] = now_iso()
+    data["perMonitor"] = normalize_per_monitor(per_raw, warnings)
     warnings.extend(clamp(data))
     return data, warnings
 

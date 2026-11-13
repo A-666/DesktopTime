@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
-from PySide6.QtWidgets import (QAbstractButton, QColorDialog, QDialog, QFrame, QGridLayout,
-                               QHBoxLayout, QLabel, QPushButton, QSizePolicy,
+from PySide6.QtWidgets import (QAbstractButton, QColorDialog, QComboBox, QDialog, QFrame,
+                               QGridLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
                                QVBoxLayout, QWidget)
 
 from .theme import (BG_DEEP, BRAND, BRAND_DEEP, BRAND_SOFT, CARD,
@@ -438,6 +438,88 @@ class PresetCard(QFrame):
 
     def mousePressEvent(self, _event) -> None:
         self.clicked.emit(self.key)
+
+
+class MonitorPicker(QWidget):
+    """03 / 04 页顶部：选一台显示器，单独调它的样式与位置。
+
+    序号与 01 页完全一致（`Monitor.index + 1`），这个序号就是配置里的唯一主键：
+    换屏 = 换一份 `perMonitor[序号]`，两页共用同一个编辑目标。
+    """
+
+    def __init__(self, controller, parent=None):
+        super().__init__(parent)
+        self.c = controller
+        self._sig = None
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(4)
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        row.addWidget(QLabel("显示器"))
+        self.combo = QComboBox()
+        self.combo.setMinimumWidth(240)
+        self.combo.currentIndexChanged.connect(self._on_pick)
+        row.addWidget(self.combo)
+        self.apply_btn = QPushButton("应用到全部")
+        self.apply_btn.setToolTip("把这一台的样式与位置复制给其他所有显示器")
+        self.apply_btn.clicked.connect(self.c.apply_style_to_all)
+        row.addWidget(self.apply_btn)
+        self.reset_btn = QPushButton("跟随全局")
+        self.reset_btn.setToolTip("放弃这一台的单独设置，重新跟随全局样式与位置")
+        self.reset_btn.clicked.connect(self.c.reset_edit_monitor)
+        row.addWidget(self.reset_btn)
+        row.addStretch(1)
+        root.addLayout(row)
+        # 说明另起一行：塞在同一行时窄窗口下会被挤掉半句
+        self.hint = QLabel("")
+        self.hint.setObjectName("hint")
+        root.addWidget(self.hint)
+        self.sync()
+
+    def _on_pick(self, _row: int) -> None:
+        idx = self.combo.currentData()
+        if idx is not None:
+            self.c.set_edit_index(int(idx))
+
+    def sync(self) -> None:
+        monitors = list(self.c.monitors)
+        idx = self.c.edit_index()
+        # 只在屏列表真变了才重建下拉项：sync 会被每次配置改动调用，
+        # 每次都 clear() 会把用户正在展开的下拉弹窗关掉
+        sig = tuple((m.index, m.width, m.height, int(round(m.scale * 100)), m.primary)
+                    for m in monitors)
+        if sig != self._sig:
+            self._sig = sig
+            self.combo.blockSignals(True)
+            self.combo.clear()
+            for m in monitors:
+                scale = int(round(m.scale * 100))
+                self.combo.addItem(
+                    f"{m.index + 1}    {m.width} × {m.height}   ·   {scale}%"
+                    f"   ({'主屏' if m.primary else '副屏'})", int(m.index))
+            self.combo.blockSignals(False)
+        pos = self.combo.findData(idx)
+        if pos >= 0 and self.combo.currentIndex() != pos:
+            self.combo.blockSignals(True)
+            self.combo.setCurrentIndex(pos)
+            self.combo.blockSignals(False)
+
+        multi = len(monitors) > 1
+        per_screen = bool(self.c.get("display.all", False)) and multi
+        has_bucket = self.c.monitor_bucket(idx) is not None
+        self.combo.setEnabled(multi)
+        self.apply_btn.setEnabled(per_screen)
+        self.reset_btn.setEnabled(multi and has_bucket)
+        if not multi:
+            self.hint.setText("只有一台显示器，设置直接作用于它")
+        elif not per_screen:
+            self.hint.setText("单屏模式：设置作用于全部显示器。"
+                              "到 01 页打开「所有显示器同时显示」后，每台可单独设置")
+        elif has_bucket:
+            self.hint.setText(f"显示器 {idx + 1} · 此屏已单独设置，与其他显示器互不影响")
+        else:
+            self.hint.setText(f"显示器 {idx + 1} · 跟随全局；改动任何一项都会为这台屏单独存一份")
 
 
 class FeedbackBar(QFrame):

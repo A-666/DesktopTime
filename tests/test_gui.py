@@ -32,6 +32,15 @@ from ui.main_window import MainWindow  # noqa: E402
 app = QApplication.instance() or QApplication([])
 
 
+def fake_monitors(n: int = 2):
+    """多屏测试用：不依赖测试机真实插了几台显示器。"""
+    from core.monitors import Monitor
+    return [Monitor(index=i, name=f"\\\\.\\DISPLAY{i + 1}",
+                    left=i * 1920, top=0, right=i * 1920 + 1920, bottom=1080,
+                    wl=i * 1920, wt=0, wr=i * 1920 + 1920, wb=1032,
+                    dpi=96, primary=(i == 0)) for i in range(n)]
+
+
 class TestRenderer(unittest.TestCase):
     def setUp(self):
         self.r = Renderer()
@@ -480,6 +489,93 @@ class TestControllerAndUI(unittest.TestCase):
         page._pick_color("#2F6DF6")
         self.assertEqual(self.c.get("style.color"), "#2F6DF6")
         self.assertEqual(self.c.get("style.recentColors")[0], "#2F6DF6")
+
+    # ---- 每屏独立样式 / 位置 ----
+
+    def test_per_monitor_style_isolated(self):
+        """03 页选不同显示器，改的是各自那一份，互不串味。"""
+        self.c.monitors = fake_monitors(2)
+        self.c.set("display.all", True)
+        base = self.c.config_for(0)["style"]["color"]
+        self.c.set_edit_index(1)
+        self.c.set("style.color", "#C9413A")
+        self.c.set("style.size", 88)
+        self.assertEqual(self.c.get("style.color"), "#C9413A")      # 页面看到的是自己改的
+        self.assertEqual(self.c.config_for(1)["style"]["size"], 88)
+        self.assertEqual(self.c.config_for(0)["style"]["color"], base)
+        self.assertEqual(self.c.config_for(0)["style"]["size"], 60)
+        self.c.set_edit_index(0)
+        self.assertEqual(self.c.get("style.color"), base)             # 切回去就是原来那份
+
+    def test_per_monitor_position_isolated(self):
+        self.c.monitors = fake_monitors(2)
+        self.c.set("display.all", True)
+        self.c.set_edit_index(0)
+        self.c.set_position_preset("top-left")
+        self.c.set_edit_index(1)
+        self.c.set_position_preset("bottom-right")
+        self.assertEqual(self.c.config_for(0)["position"]["preset"], "top-left")
+        self.assertEqual(self.c.config_for(1)["position"]["preset"], "bottom-right")
+
+    def test_per_monitor_pack_follows_preset(self):
+        """换预设连带换样式包：装饰层要按那台屏自己的配置解析。"""
+        self.c.monitors = fake_monitors(2)
+        self.c.set("display.all", True)
+        self.c.set_edit_index(1)
+        self.c.set_preset("tech")
+        self.assertEqual(len(self.c.pack_for(1)["decorations"]), 2)
+        self.assertEqual(len(self.c.pack_for(0)["decorations"]), 0)
+
+    def test_apply_to_all_and_follow_global(self):
+        self.c.monitors = fake_monitors(3)
+        self.c.set("display.all", True)
+        self.c.set_edit_index(1)
+        self.c.set("style.color", "#0969DA")
+        self.c.apply_style_to_all()
+        for i in range(3):
+            self.assertEqual(self.c.config_for(i)["style"]["color"], "#0969DA")
+        self.c.set_edit_index(2)
+        self.c.reset_edit_monitor()
+        self.assertIsNone(self.c.monitor_bucket(2))
+        self.assertEqual(self.c.config_for(2)["style"]["color"],
+                         self.c.data()["style"]["color"])
+
+    def test_single_mode_writes_global(self):
+        """单屏模式不能偷偷建 perMonitor，否则「页面显示 A、桌面渲染 B」。"""
+        self.c.monitors = fake_monitors(2)
+        self.c.set("display.all", False)
+        self.c.set("style.size", 72)
+        self.assertEqual(self.c.data()["perMonitor"], {})
+        self.assertEqual(self.c.data()["style"]["size"], 72)
+
+    def test_monitor_picker_shows_number_and_resolution(self):
+        self.c.monitors = fake_monitors(2)
+        self.win.nav.setCurrentRow(2)
+        page = self.win.pages[2]
+        page.sync_all()
+        combo = page.picker.combo
+        self.assertEqual(combo.count(), 2)
+        self.assertEqual(combo.itemData(0), 0)
+        self.assertEqual(combo.itemData(1), 1)
+        self.assertIn("1920", combo.itemText(0))
+        self.assertIn("1080", combo.itemText(0))
+        # 04 页用同一个控件、同一个编辑目标
+        self.win.nav.setCurrentRow(3)
+        self.assertEqual(self.win.pages[3].picker.combo.count(), 2)
+
+    def test_edit_target_survives_switch(self):
+        """切屏 → 页面值同步换人（03 页样式与 04 页位置一起换）。"""
+        self.c.monitors = fake_monitors(2)
+        self.c.set("display.all", True)
+        self.c.set_edit_index(0)
+        self.c.set("style.size", 40)
+        self.c.set_edit_index(1)
+        self.c.set("style.size", 90)
+        self.win.nav.setCurrentRow(2)
+        page = self.win.pages[2]
+        self.assertEqual(page.size.value(), 90)
+        self.c.set_edit_index(0)
+        self.assertEqual(page.size.value(), 40)
 
     def test_nine_grid_click(self):
         self.win.nav.setCurrentRow(3)
