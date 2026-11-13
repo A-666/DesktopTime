@@ -540,6 +540,24 @@ class TestControllerAndUI(unittest.TestCase):
         self.assertEqual(self.c.config_for(2)["style"]["color"],
                          self.c.data()["style"]["color"])
 
+    def test_apply_to_all_from_global_clears_per_monitor(self):
+        """源屏本来跟随全局时，「应用到全部」应清空独立配置而不是发副本 ——
+        副本看着一样，但之后改全局不会跟着变，就不是真的「统一」了。"""
+        self.c.monitors = fake_monitors(3)
+        self.c.set("display.all", True)
+        self.c.set_edit_index(1)
+        self.c.set("style.size", 40)
+        self.c.set_edit_index(2)
+        self.c.set("style.size", 90)
+        self.assertEqual(set(self.c.data()["perMonitor"]), {"1", "2"})
+
+        self.c.set_edit_index(0)          # 0 号屏没有独立配置，跟随全局
+        self.c.apply_style_to_all()
+        self.assertEqual(self.c.settings.data.get("perMonitor"), {})
+        for i in range(3):
+            self.assertEqual(self.c.config_for(i)["style"]["size"],
+                             self.c.data()["style"]["size"])
+
     def test_single_mode_writes_global(self):
         """单屏模式不能偷偷建 perMonitor，否则「页面显示 A、桌面渲染 B」。"""
         self.c.monitors = fake_monitors(2)

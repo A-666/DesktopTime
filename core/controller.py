@@ -261,21 +261,28 @@ class AppController(QObject):
         return cached
 
     def apply_style_to_all(self) -> None:
-        """把当前编辑屏的样式 + 位置复制给其他所有屏。"""
+        """把当前编辑屏的样式 + 位置复制给其他所有屏。
+
+        当前屏自己没有独立配置时（跟随全局），不该给别人发一份「等于全局的副本」，
+        而是让它们也回到跟随全局 —— 直接清空 perMonitor。两者看着一样，但清空之后
+        改全局时这些屏会跟着变，副本不会。
+        """
         src_idx = self.edit_index()
         src = self.monitor_bucket(src_idx)
-        if src is None:
-            src = {"style": copy.deepcopy(self.settings.data["style"]),
-                   "position": copy.deepcopy(self.settings.data["position"])}
         buckets = self.settings.data.setdefault("perMonitor", {})
-        for m in self.monitors:
-            if int(m.index) == src_idx:
-                continue
-            buckets[str(int(m.index))] = copy.deepcopy(src)
+        if src is None:
+            buckets.clear()
+            note = "已让所有显示器统一跟随全局设置"
+        else:
+            for m in self.monitors:
+                if int(m.index) == src_idx:
+                    continue
+                buckets[str(int(m.index))] = copy.deepcopy(src)
+            note = f"已把显示器 {src_idx + 1} 的样式与位置应用到全部显示器"
         self._pack_cache.clear()
         self._save_timer.start(150)
         self.settingsReplaced.emit()
-        self.notice.emit(f"已把显示器 {src_idx + 1} 的样式与位置应用到全部显示器")
+        self.notice.emit(note)
 
     def reset_edit_monitor(self) -> None:
         """放弃该屏的单独设置，改回和其他显示器一样。"""
