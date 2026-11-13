@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
-from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QColorDialog, QComboBox, QDialog,
-                               QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-                               QSizePolicy, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractButton, QColorDialog, QComboBox, QDialog, QFrame,
+                               QGridLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
+                               QVBoxLayout, QWidget)
 
 from .theme import (BG_DEEP, BRAND, BRAND_DEEP, BRAND_SOFT, CARD,
                     FG, FG_FAINT, LINE)
@@ -451,7 +451,6 @@ class MonitorPicker(QWidget):
         super().__init__(parent)
         self.c = controller
         self._sig = None
-        self._syncing = False          # 回填复选框状态时屏蔽 toggled，避免自激
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(4)
@@ -466,11 +465,6 @@ class MonitorPicker(QWidget):
         self.apply_btn.setToolTip("把这一台的样式与位置复制给其他所有显示器")
         self.apply_btn.clicked.connect(self.c.apply_style_to_all)
         row.addWidget(self.apply_btn)
-        self.standalone = QCheckBox("本屏单独设置")
-        self.standalone.setToolTip("勾上后，改动只影响这一台显示器；"
-                                   "取消勾选就改回和其他显示器一样")
-        self.standalone.toggled.connect(self._on_standalone)
-        row.addWidget(self.standalone)
         row.addStretch(1)
         root.addLayout(row)
         # 说明另起一行：塞在同一行时窄窗口下会被挤掉半句
@@ -483,11 +477,6 @@ class MonitorPicker(QWidget):
         idx = self.combo.currentData()
         if idx is not None:
             self.c.set_edit_index(int(idx))
-
-    def _on_standalone(self, checked: bool) -> None:
-        if self._syncing:
-            return
-        self.c.set_edit_monitor_standalone(bool(checked))
 
     def sync(self) -> None:
         monitors = list(self.c.monitors)
@@ -517,12 +506,6 @@ class MonitorPicker(QWidget):
         has_bucket = self.c.monitor_bucket(idx) is not None
         self.combo.setEnabled(multi)
         self.apply_btn.setEnabled(per_screen)
-        # 回填状态时必须屏蔽 toggled：否则 sync 自己就会触发一次「开启/关闭单独设置」
-        # 单屏模式下一律显示未勾：此时所有设置都写全局，勾着会让人以为分家在生效
-        self._syncing = True
-        self.standalone.setChecked(has_bucket and per_screen)
-        self._syncing = False
-        self.standalone.setEnabled(per_screen)
         if not multi:
             self.hint.setText("只有一台显示器，设置直接作用于它")
         elif not per_screen:

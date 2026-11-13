@@ -583,7 +583,7 @@ class TestControllerAndUI(unittest.TestCase):
         page.grid._pick("bottom")
         self.assertEqual(self.c.get("position.preset"), "bottom")
 
-    # ---------- 每屏「单独设置」复选框 ----------
+    # ---------- 每屏编辑目标 ----------
 
     def _picker(self, row: int = 2):
         self.win.nav.setCurrentRow(row)
@@ -591,38 +591,21 @@ class TestControllerAndUI(unittest.TestCase):
         picker.sync()
         return picker
 
-    def test_standalone_checkbox_creates_and_removes_bucket(self):
-        """勾上 = 为这屏建一份独立配置；取消勾 = 删掉它。"""
+    def test_picker_only_has_combo_and_apply_all(self):
+        """03 / 04 页顶部只留「显示器下拉 + 应用到全部」，不再挂单独设置的开关。"""
         self.c.monitors = fake_monitors(2)
         self.c.set("display.all", True)
-        self.c.set_edit_index(0)
         picker = self._picker()
-        self.assertIsNone(self.c.monitor_bucket(0))
+        self.assertFalse(hasattr(picker, "standalone"))
+        self.assertEqual(picker.combo.count(), 2)
+        self.assertTrue(picker.apply_btn.isEnabled())
+        self.assertIn("单独设置", picker.hint.text())
 
-        picker.standalone.setChecked(True)
-        self.assertIsNotNone(self.c.monitor_bucket(0))
-
-        picker.standalone.setChecked(False)
-        self.assertIsNone(self.c.monitor_bucket(0))
-
-    def test_standalone_checkbox_follows_auto_bucket(self):
-        """没勾复选框时改一项设置也会自动建独立配置，复选框要跟着打勾。"""
-        self.c.monitors = fake_monitors(2)
-        self.c.set("display.all", True)
-        self.c.set_edit_index(1)
-        picker = self._picker()
-        self.assertFalse(picker.standalone.isChecked())
-        self.c.set("style.size", 55)
-        picker.sync()
-        self.assertTrue(picker.standalone.isChecked())
-        self.assertIsNotNone(self.c.monitor_bucket(1))
-
-    def test_standalone_ignored_on_single_screen(self):
-        """单屏模式只有一份配置，复选框必须禁用且改了也不落 perMonitor。"""
+    def test_single_mode_still_writes_global(self):
+        """没有开关也不等于能在单屏模式分家：改设置仍然只落全局。"""
         self.c.monitors = fake_monitors(1)
         self.c.set("display.all", False)
-        picker = self._picker()
-        self.assertFalse(picker.standalone.isEnabled())
+        self._picker()
         self.c.set("style.size", 66)
         self.assertEqual(self.c.settings.data.get("perMonitor"), {})
 

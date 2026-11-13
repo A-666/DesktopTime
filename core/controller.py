@@ -277,29 +277,6 @@ class AppController(QObject):
         self.settingsReplaced.emit()
         self.notice.emit(f"已把显示器 {src_idx + 1} 的样式与位置应用到全部显示器")
 
-    def set_edit_monitor_standalone(self, enabled: bool) -> None:
-        """勾上 / 取消 03 / 04 页的「本屏单独设置」复选框。
-
-        勾上 = 以此刻生效的配置为底，为这台屏存一份，之后改动只影响它；
-        取消 = 删掉这一份，改回和其他显示器一样。
-        """
-        idx = self.edit_index()
-        if not enabled:
-            self.reset_edit_monitor()
-            return
-        if not self._bucket_mode():
-            # 单屏模式下只有一份配置，分家会立刻出现「页面显示 A、桌面渲染 B」
-            self.notice.emit("单屏模式下只有一份配置，先在 01 页打开「所有显示器同时显示」")
-            return
-        if self.monitor_bucket(idx) is not None:
-            return
-        self._ensure_bucket(idx)
-        self._pack_cache.pop(str(idx), None)
-        self._save_timer.start(150)
-        self.refresh_pack()          # 编辑目标的样式包换成了它自己那份
-        self.settingsReplaced.emit()
-        self.notice.emit(f"显示器 {idx + 1} 已开启单独设置")
-
     def reset_edit_monitor(self) -> None:
         """放弃该屏的单独设置，改回和其他显示器一样。"""
         idx = self.edit_index()
