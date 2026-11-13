@@ -583,6 +583,80 @@ class TestControllerAndUI(unittest.TestCase):
         page.grid._pick("bottom")
         self.assertEqual(self.c.get("position.preset"), "bottom")
 
+    # ---------- 每屏「单独设置」复选框 ----------
+
+    def _picker(self, row: int = 2):
+        self.win.nav.setCurrentRow(row)
+        picker = self.win.pages[row].picker
+        picker.sync()
+        return picker
+
+    def test_standalone_checkbox_creates_and_removes_bucket(self):
+        """勾上 = 为这屏建一份独立配置；取消勾 = 删掉它。"""
+        self.c.monitors = fake_monitors(2)
+        self.c.set("display.all", True)
+        self.c.set_edit_index(0)
+        picker = self._picker()
+        self.assertIsNone(self.c.monitor_bucket(0))
+
+        picker.standalone.setChecked(True)
+        self.assertIsNotNone(self.c.monitor_bucket(0))
+
+        picker.standalone.setChecked(False)
+        self.assertIsNone(self.c.monitor_bucket(0))
+
+    def test_standalone_checkbox_follows_auto_bucket(self):
+        """没勾复选框时改一项设置也会自动建独立配置，复选框要跟着打勾。"""
+        self.c.monitors = fake_monitors(2)
+        self.c.set("display.all", True)
+        self.c.set_edit_index(1)
+        picker = self._picker()
+        self.assertFalse(picker.standalone.isChecked())
+        self.c.set("style.size", 55)
+        picker.sync()
+        self.assertTrue(picker.standalone.isChecked())
+        self.assertIsNotNone(self.c.monitor_bucket(1))
+
+    def test_standalone_ignored_on_single_screen(self):
+        """单屏模式只有一份配置，复选框必须禁用且改了也不落 perMonitor。"""
+        self.c.monitors = fake_monitors(1)
+        self.c.set("display.all", False)
+        picker = self._picker()
+        self.assertFalse(picker.standalone.isEnabled())
+        self.c.set("style.size", 66)
+        self.assertEqual(self.c.settings.data.get("perMonitor"), {})
+
+    # ---------- 06 方案页的右键菜单 ----------
+
+    def test_profile_menu_on_item(self):
+        from PySide6.QtWidgets import QListWidgetItem
+
+        self.win.nav.setCurrentRow(5)
+        page = self.win.pages[5]
+        item = QListWidgetItem("我的配置")
+        page.list.addItem(item)
+        texts = [a.text() for a in page._build_menu(item).actions() if not a.isSeparator()]
+        self.assertEqual(texts, ["保存当前设置", "另存为…", "重命名…", "删除"])
+
+    def test_profile_menu_on_blank_area_only_offers_save_as(self):
+        self.win.nav.setCurrentRow(5)
+        page = self.win.pages[5]
+        texts = [a.text() for a in page._build_menu(None).actions() if not a.isSeparator()]
+        self.assertEqual(texts, ["另存为…"])
+
+    def test_profile_list_keeps_selection_after_refresh(self):
+        """右键保存 / 重命名都会重建列表，选中项不能丢。"""
+        self.win.nav.setCurrentRow(5)
+        page = self.win.pages[5]
+        for name in ("Alpha", "Beta", "Gamma"):
+            self.c.save_profile(name)
+        page.sync_all()
+        row = next(i for i in range(page.list.count())
+                   if page.list.item(i).text() == "Beta")
+        page.list.setCurrentRow(row)
+        page._refresh_list()
+        self.assertEqual(page._current_name(), "Beta")
+
 
 class TestTrayBubble(unittest.TestCase):
     """回归：非首次启动的托盘气泡曾因 type= 关键字导致 exe 启动即崩。"""

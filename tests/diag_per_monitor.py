@@ -46,7 +46,7 @@ def main() -> int:
 
     OUT.mkdir(parents=True, exist_ok=True)
 
-    # 1) 单屏模式：下拉框应该在，但「应用到全部 / 跟随全局」是灰的
+    # 1) 单屏模式：下拉框应该在，但「应用到全部 / 取消单独设置」是灰的
     win.nav.setCurrentRow(2)
     page3 = win.pages[2]
     settle(app, win, page3)

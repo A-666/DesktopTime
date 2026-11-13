@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QFontDatabase, QPixmap
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFileDialog,
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QListWidget, QListWidgetItem, QPushButton, QScrollArea,
+                               QListWidget, QListWidgetItem, QMenu, QPushButton, QScrollArea,
                                QSlider, QSpinBox, QVBoxLayout, QWidget)
 
 from core import clock, store, stylepack
@@ -664,25 +664,47 @@ class Page06Profiles(BasePage):
 
         card = self.card("已保存方案")
         self.list = QListWidget()
-        self.list.setFixedHeight(220)
+        self.list.setFixedHeight(240)
         self.list.itemClicked.connect(self._on_item_clicked)
+        # 保存 / 另存为 / 重命名 / 删除 本来就是针对「某一个具体方案」的动作，
+        # 收进右键菜单比在下面摆一排按钮更贴近操作对象，也省掉一行控件
+        self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list.customContextMenuRequested.connect(self._menu)
         card.add(self.list)
+        tip = QLabel("点选方案名即切换；在方案名上点右键可保存、另存为、重命名或删除。")
+        tip.setObjectName("hint")
+        card.add(tip)
         self.lay.addWidget(card)
 
-        ops = Card()
-        ops.add(SectionTitle("方案管理"))
-        row = QHBoxLayout()
-        for text, slot in (("保存当前设置", self._save), ("另存为…", self._save_as),
-                           ("复制方案", self._duplicate), ("重命名", self._rename),
-                           ("删除方案", self._delete)):
-            b = QPushButton(text)
-            b.clicked.connect(slot)
-            row.addWidget(b)
-        row.addStretch(1)
-        ops.add_layout(row)
-        self.lay.addWidget(ops)
+        info = Card()
+        info.add(SectionTitle("当前生效"))
+        self.current_lab = QLabel("")
+        info.add(self.current_lab)
+        self.lay.addWidget(info)
+
         self.c.undoStateChanged.connect(self._refresh_feedback)
         self.c.profilesChanged.connect(self._refresh_list)
+
+    def _menu(self, pos) -> None:
+        """右键菜单：点在哪一行，就对哪一行操作。"""
+        item = self.list.itemAt(pos)
+        if item is not None:
+            self.list.setCurrentItem(item)
+        self._build_menu(item).exec(self.list.viewport().mapToGlobal(pos))
+
+    def _build_menu(self, item: QListWidgetItem | None) -> QMenu:
+        """拆出来是为了能测：QMenu.exec 会阻塞，测试只检查菜单里有哪些项。
+        空白处没有操作对象，只留「另存为」—— 否则用户一处都找不到新建入口。"""
+        menu = QMenu(self)
+        if item is None:
+            menu.addAction("另存为…", self._save_as)
+            return menu
+        menu.addAction("保存当前设置", self._save)
+        menu.addAction("另存为…", self._save_as)
+        menu.addSeparator()
+        menu.addAction("重命名…", self._rename)
+        menu.addAction("删除", self._delete)
+        return menu
 
     def _current_name(self) -> str | None:
         item = self.list.currentItem()
@@ -702,13 +724,6 @@ class Page06Profiles(BasePage):
         dlg = NameDialog(self.window(), "另存为方案", "方案名称", "我的配置")
         if dlg.exec() == QDialog.DialogCode.Accepted and dlg.value():
             self.c.save_profile(dlg.value())
-
-    def _duplicate(self) -> None:
-        name = self._current_name()
-        if not name:
-            self.c.notice.emit("请先选择一个方案")
-            return
-        self.c.duplicate_profile(name)
 
     def _rename(self) -> None:
         name = self._current_name()
@@ -730,15 +745,34 @@ class Page06Profiles(BasePage):
             self.c.delete_profile(name)
 
     def _refresh_list(self) -> None:
+        # 重建列表后要把选中项找回来：右键「保存/重命名」都会触发重建，
+        # 选中丢了用户就得重新找一遍，而且下一次右键会落到别的方案上
+        keep = self._current_name()
         self.list.blockSignals(True)
         self.list.clear()
+        target = None
         for row in self.c.profiles.list():
             item = QListWidgetItem(row["name"])
             if row["savedAt"]:
                 item.setToolTip(f"保存于 {row['savedAt']}")
             self.list.addItem(item)
+            if item.text() == keep:
+                target = item
+        if target is not None:
+            self.list.setCurrentItem(target)
         self.list.blockSignals(False)
+        # 高度跟着方案数量走：固定 240 只有两三个方案时下半截全是空白
+        rows = self.list.count()
+        self.list.setFixedHeight(min(240, max(120, rows * 31 + 8)))
+        self.current_lab.setText(self._current_desc())
         self._refresh_feedback()
+
+    def _current_desc(self) -> str:
+        label = self.c.current_label
+        names = {row["name"] for row in self.c.profiles.list()}
+        if label in names:
+            return f"{label}（改动后点右键选「保存当前设置」才会写回这个方案）"
+        return "当前配置（尚未保存成方案，右键选「另存为…」可存一份）"
 
     def _refresh_feedback(self, *_args) -> None:
         self.feedback.set_info(self.c.undo_info())
