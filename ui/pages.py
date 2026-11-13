@@ -330,8 +330,22 @@ class Page03Style(BasePage):
         g = QGridLayout()
         g.setSpacing(8)
         self.font = QComboBox()
-        for fam in sorted(QFontDatabase.families(), key=str.lower):
+        # Windows 还带着 12 套老式位图字体（MS Sans Serif / Fixedsys / Terminal /
+        # ADMUI3Lg / Modern / Roman / Script / System…）。DirectWrite 只认
+        # TrueType/OpenType，为它们建字体面必然失败，Qt 每渲染一次就报一条
+        # 「CreateFontFaceFromHDC() failed」把控制台刷满；而且它们在现代 DPI 下
+        # 根本无法平滑缩放，本来就不该出现在字体选择里，这里按可缩放性排除。
+        smooth = {fam for fam in QFontDatabase.families()
+                  if QFontDatabase.isSmoothlyScalable(fam)}
+        current_family = str(self.c.get("style.font", "Consolas"))
+        legacy = current_family not in smooth
+        families = sorted(smooth, key=str.lower)
+        if legacy:
+            families.append(current_family)   # 老配置存过位图字体：留个名字能选中
+        for fam in families:
             self.font.addItem(fam, fam)
+            if legacy and fam == current_family:
+                continue          # 位图字体不挂 FontRole，否则又会触发那条报错
             # 每项用它自己的字体显示，选字体时能直接看到字形
             self.font.setItemData(self.font.count() - 1, QFont(fam),
                                   Qt.ItemDataRole.FontRole)

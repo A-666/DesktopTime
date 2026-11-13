@@ -178,6 +178,50 @@ def _cli_command(argv: list[str]) -> str | None:
     return None
 
 
+_qt_prev_handler = None          # qInstallMessageHandler 返回的上一个处理器
+
+
+def _should_swallow_qt_message(category: str, message: str) -> bool:
+    """判定一条 Qt 消息是否属于「位图字体建不出面」的纯噪音。
+
+    单独抽出来是为了能测：真正的判定必须窄到只匹配这一类，别把别的 Qt 警告
+    也一起吞掉 —— 那等于把问题藏起来而不是解决。
+    """
+    return category == "qt.qpa.fonts" and "CreateFontFaceFromHDC" in message
+
+
+def _install_qt_log_filter() -> None:
+    """静默掉 DirectWrite 建不出位图字体面时刷屏的那条 Qt 警告。
+
+    Windows 始终挂着几套老式 raster 字体（MS Sans Serif / Fixedsys / Terminal /
+    ADMUI3Lg / Modern / Roman / Script / System…）。DirectWrite 只认 TrueType
+    与 OpenType，为它们建字体面必然失败，会按字体数刷出几十行
+    「qt.qpa.fonts: DirectWrite: CreateFontFaceFromHDC() failed」。这些字体在
+    03 页已经按 isSmoothlyScalable 排除，剩下的漏网场景（例如老配置里存过位图
+    字体名）在这里静默，避免控制台被同一句话刷满。
+
+    只吞这一种消息：其余 Qt 警告、critical、fatal 一律照原样输出，不当垃圾桶。
+    """
+    global _qt_prev_handler
+    from PySide6.QtCore import qInstallMessageHandler
+
+    def _handler(mode, context, message):
+        if _should_swallow_qt_message(getattr(context, "category", ""), message):
+            return
+        if _qt_prev_handler is not None:
+            _qt_prev_handler(mode, context, message)
+            return
+        stream = getattr(sys, "stderr", None)
+        if stream is None:
+            return
+        try:
+            stream.write(message + "\n")
+        except (OSError, ValueError):
+            pass
+
+    _qt_prev_handler = qInstallMessageHandler(_handler)
+
+
 def _flush_streams() -> None:
     """刷标准流，且必须容忍它们是 None。
 
@@ -233,6 +277,7 @@ def _exit_with_watchdog(code: int, timeout: float = 2.5) -> None:
 
 def main() -> int:
     dpi_mode = set_dpi_awareness()  # 必须早于 QApplication
+    _install_qt_log_filter()        # 字体警告可能在 QApplication 构造期就刷出来
     want = _cli_command(sys.argv[1:])
     app = QApplication(sys.argv)
     app.setApplicationName("DesktopTime")

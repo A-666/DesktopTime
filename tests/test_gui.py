@@ -658,6 +658,41 @@ class TestControllerAndUI(unittest.TestCase):
         page._refresh_list()
         self.assertEqual(page._current_name(), "Beta")
 
+    # ---------- 字体列表与 Qt 日志噪音 ----------
+
+    def test_font_list_excludes_bitmap_fonts(self):
+        """Windows 位图字体不能进字体下拉。
+
+        DirectWrite 只认 TrueType/OpenType，为 raster 字体建面必然失败，
+        Qt 会按字体数刷出几十行「CreateFontFaceFromHDC() failed」。
+        """
+        from PySide6.QtGui import QFontDatabase
+
+        # offscreen 平台没有真实字体后端（families() 只有 1 个且全部判为不可缩放），
+        # 在这里断言等于测空集，得用 windows 平台跑才有意义
+        if len(QFontDatabase.families()) <= 50:
+            self.skipTest("当前无真实字体后端（offscreen），字体列表不具参考性")
+
+        self.win.nav.setCurrentRow(2)
+        page = self.win.pages[2]
+        families = [page.font.itemData(i) for i in range(page.font.count())]
+        bad = [f for f in families if not QFontDatabase.isSmoothlyScalable(f)]
+        self.assertEqual(bad, [], f"这些位图字体不该出现在列表里: {bad}")
+        self.assertNotIn("MS Sans Serif", families)
+        self.assertIn("Consolas", families)
+
+    def test_qt_log_filter_scope_is_narrow(self):
+        """日志过滤器只该吞「位图字体建不出面」这一种，别的 Qt 消息不能连坐。"""
+        from app import _should_swallow_qt_message as swallow
+
+        noise = ("DirectWrite: CreateFontFaceFromHDC() failed "
+                 "(指示输入文件 (例如字体文件) 中的错误。) for QFontDef(Family=\"System\")")
+        self.assertTrue(swallow("qt.qpa.fonts", noise))
+        self.assertFalse(swallow("qt.qpa.fonts", "某个别的字体告警"))
+        self.assertFalse(swallow("qt.qpa.gl", noise))
+        self.assertFalse(swallow("", noise))
+        self.assertFalse(swallow("default", "普通消息"))
+
 
 class TestTrayBubble(unittest.TestCase):
     """回归：非首次启动的托盘气泡曾因 type= 关键字导致 exe 启动即崩。"""
