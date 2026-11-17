@@ -148,7 +148,36 @@ class TestClock(unittest.TestCase):
         self.assertEqual(clock.apply_format("HH:mm:ss", _NOW), "14:35:08")
 
     def test_12h(self):
-        self.assertEqual(clock.apply_format("hh:mm tt", _NOW, True), "02:35 PM")
+        """12 小时制不补前导零：2:35 PM，不是 02:35 PM。"""
+        self.assertEqual(clock.apply_format("hh:mm tt", _NOW, True), "2:35 PM")
+
+    def test_12h_switch_overrides_hour_token(self):
+        """勾上 12 小时制后，格式串里写的 HH 也得按 12 小时输出。
+
+        否则会出现「开关拨了没反应」——格式是默认的 HH:mm:ss 时，用户拨开关
+        看到的还是 18:40，只会以为开关坏了。
+        """
+        self.assertEqual(clock.apply_format("HH:mm:ss", _NOW, True), "2:35:08")
+
+    def test_12h_midnight_and_noon(self):
+        """0 点与 12 点是两位最容易写错：应为 12:05 AM / 12:05 PM。"""
+        midnight = datetime(2026, 11, 11, 0, 5, 9)
+        noon = datetime(2026, 11, 11, 12, 5, 9)
+        self.assertEqual(clock.apply_format("h:mm tt", midnight, True), "12:05 AM")
+        self.assertEqual(clock.apply_format("h:mm tt", noon, True), "12:05 PM")
+        self.assertEqual(clock.apply_format("h:mm tt", _NOW, True), "2:35 PM")
+
+    def test_12h_off_respects_format_string(self):
+        """开关关着时不改写标记：HH 是 24 小时，hh 仍是 12 小时。"""
+        self.assertEqual(clock.apply_format("HH:mm", _NOW, False), "14:35")
+        self.assertEqual(clock.apply_format("hh:mm tt", _NOW, False), "02:35 PM")
+
+    def test_build_lines_12h_no_leading_zero(self):
+        """端到端：默认格式 + 勾 12 小时制 = 2:35:08 PM。"""
+        cfg = {"time": {"format": "HH:mm:ss", "showSeconds": True,
+                        "hour12": True, "custom": ""}}
+        main, _sub = clock.build_lines(_NOW, cfg)
+        self.assertEqual(main, "2:35:08 PM")
 
     def test_tokens(self):
         expected = f"2026-11-11 {clock.WEEKDAY_CN[_NOW.weekday()]}"

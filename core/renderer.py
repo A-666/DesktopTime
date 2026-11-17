@@ -82,11 +82,36 @@ def _pick_font(family: str) -> str:
 _SEG_MAP = {
     "0": "abcdef", "1": "bc", "2": "abdeg", "3": "abcdg", "4": "bcfg",
     "5": "acdfg", "6": "acdefg", "7": "abc", "8": "abcdefg", "9": "abcdfg",
+    # 上下午角标用的两个字母。七段码本来就能画 A 和 P，真实 LCD 钟角落那枚
+    # AM/PM 灯就是这两个字形 —— 比在数字后面留一段谁也看不懂的空白强。
+    "A": "abcefg", "P": "abefg",
     "-": "g", "_": "d", " ": "",
 }
 # 段相对字高的比例（照抄常见 LCD 版式：字宽 0.58H、笔厚 0.14H、字距 0.16H）
 _SEG_W, _SEG_T, _SEG_GAP = 0.58, 0.14, 0.16
 _SEG_COLON, _SEG_DOT = 0.20, 0.14
+# 上下午角标：字高取主字高的 44%，与数字之间留 0.12H 的空隙，底部对齐。
+# A / P 两个字母都画 —— 只画一个的话，屏幕角落一枚孤零零的 P 谁也猜不出含义；
+# 两个都在、亮的是当前上下午，就和真实 LCD 钟的 A/P 标一模一样了。
+_SEG_BADGE_SCALE, _SEG_BADGE_GAP, _SEG_BADGE_KERN = 0.44, 0.12, 0.14
+_SEG_BADGE_MARKS = ("A", "P")
+# 翻页卡的角标走字体，尺寸按主字号的 30% 走，右侧留 0.14 字号的空隙
+_FLIP_BADGE_SCALE, _FLIP_BADGE_GAP = 0.30, 0.14
+
+
+def _seg_badge_height(main_h: float) -> int:
+    """角标字高。segment_path 会把小于 12px 的高度抬到 12，测宽与绘制必须
+    用同一个值，否则字小时角标会被画到画布外。"""
+    return int(max(12, round(main_h * _SEG_BADGE_SCALE)))
+
+
+def _seg_badge_width(main_h: float) -> float:
+    """角标区总宽：前空隙 + A + 字间空隙 + P。"""
+    h = _seg_badge_height(main_h)
+    one = segment_layout(_SEG_BADGE_MARKS[0], h)[0]
+    return (main_h * _SEG_BADGE_GAP
+            + one * len(_SEG_BADGE_MARKS)
+            + main_h * _SEG_BADGE_KERN * (len(_SEG_BADGE_MARKS) - 1))
 
 
 def _hseg(x0: float, x1: float, y: float, t: float) -> QPainterPath:
@@ -397,11 +422,29 @@ class Renderer:
         sub_font.setPixelSize(max(10, int(size * 0.36)))
         sub_font.setWeight(QFont.Weight.Normal)
         sub_fm = QFontMetrics(sub_font)
+        # 翻页卡的上下午角标也用字体，但比副行更小：它是标注，不是内容
+        flip_badge_font = QFont(family)
+        flip_badge_font.setPixelSize(max(9, int(size * _FLIP_BADGE_SCALE)))
+        flip_badge_fm = QFontMetrics(flip_badge_font)
 
         # 五种绘制模式：text 字形 / segments 七段码 / analog 指针 / flip 翻页卡 / dots 点阵
         mode = str(pack.get("render") or "text")
         if mode not in RENDER_MODES:
             mode = "text"
+        # 七段码和翻页卡都画不出 AM / PM：这两个字母留在主行里会被当成 blank
+        # 吞掉，12 小时制的屏幕上就只剩数字后面一截莫名的空隙（而样式里的分隔线
+        # 还会跟着这段空白一路画过去）。这里先把后缀剥离出来另行处理。
+        seg_badge = ""       # segments：七段码只能画单个字母，用 A / P
+        flip_badge = ""      # flip：走字体，可以画全称 AM / PM
+        if mode in ("segments", "flip"):
+            for suffix, mark in ((" AM", "AM"), (" PM", "PM")):
+                if main_text.endswith(suffix):
+                    main_text = main_text[: -len(suffix)]
+                    if mode == "segments":
+                        seg_badge = mark[0]
+                    else:
+                        flip_badge = mark
+                    break
         card = pack.get("card") if isinstance(pack.get("card"), dict) else {}
         flip_boxes: list[tuple[float, float, float]] = []
 
@@ -413,10 +456,15 @@ class Renderer:
         elif mode == "segments":
             main_h = int(max(16, size))
             main_w = int(round(segment_layout(main_text, main_h)[0]))
+            if seg_badge:
+                main_w += int(round(_seg_badge_width(main_h)))
         elif mode == "flip":
             digit_w = max(fm.horizontalAdvance(d) for d in "0123456789")
             main_w = int(math.ceil(flip_layout(main_text, size, digit_w)[0]))
             main_h = int(math.ceil(fm.height() + size * _FLIP_PAD_Y * 2))
+            if flip_badge:
+                main_w += int(round(size * _FLIP_BADGE_GAP
+                                    + flip_badge_fm.horizontalAdvance(flip_badge)))
         elif mode == "dots":
             pitch = max(3.0, size * _DOT_RATIO)
             cols = max(1, int(math.ceil(max(1, fm.horizontalAdvance(main_text)) / pitch)))
@@ -476,9 +524,10 @@ class Renderer:
         # analog 模式不产生文字，主行文本恒为空，必须把「当前秒」编进缓存键，
         # 否则秒针会停在第一帧不动。
         time_key = (now.hour, now.minute, now.second) if mode == "analog" else None
-        cache_key = (mode, main_text, sub_text, time_key, w, h, round(dpr, 3), family, size,
-                     str(weight), color, tuple(style.get("textStyles") or []), opacity,
-                     repr(decs), repr(effs), bool(effs and now_ms // 33))
+        cache_key = (mode, main_text, seg_badge, flip_badge, sub_text, time_key, w, h,
+                     round(dpr, 3), family, size, str(weight), color,
+                     tuple(style.get("textStyles") or []), opacity, repr(decs), repr(effs),
+                     bool(effs and now_ms // 33))
         if not effs and cache_key == self._cached_key and self._cached_image is not None:
             return self._cached_image
 
@@ -497,6 +546,7 @@ class Renderer:
         main_x = tx + (text_w - main_w) / 2.0
         main_path = QPainterPath()
         ghost_path = None
+        dim_path = None
         if mode == "segments":
             main_path = segment_path(main_text, main_h)
             ghost_ink = str(pack.get("segmentGhost") or "")
@@ -507,9 +557,30 @@ class Renderer:
                 main_path.translate(main_x, float(pad))
             if ghost_path is not None:
                 ghost_path.translate(main_x, float(pad))
+            if seg_badge:
+                # 两个字母都画：亮的进主路径，暗的单独一条低透明度路径垫在下面
+                badge_h = _seg_badge_height(main_h)
+                badge_x = main_x + segment_layout(main_text, main_h)[0] + main_h * _SEG_BADGE_GAP
+                badge_y = float(pad) + main_h - badge_h
+                one_w = segment_layout(_SEG_BADGE_MARKS[0], badge_h)[0]
+                dim_path = QPainterPath()
+                for mark in _SEG_BADGE_MARKS:
+                    cell = segment_path(mark, badge_h)
+                    cell.translate(badge_x, badge_y)
+                    if mark == seg_badge:
+                        main_path.addPath(cell)
+                    else:
+                        dim_path.addPath(cell)
+                    badge_x += one_w + main_h * _SEG_BADGE_KERN
         elif mode == "flip":
             main_path, flip_boxes = flip_paths(main_text, size, font, fm, digit_w)
             main_path.translate(main_x, float(pad))
+            if flip_badge:
+                # 角标在卡片区右侧、垂直居中：卡片的上下沿都留了 padding，
+                # 贴着卡片中轴放才不会看起来往上飘
+                badge_x = main_x + flip_layout(main_text, size, digit_w)[0] + size * _FLIP_BADGE_GAP
+                badge_y = float(pad) + (main_h - flip_badge_fm.height()) / 2.0 + flip_badge_fm.ascent()
+                main_path.addText(QPointF(badge_x, badge_y), flip_badge_font, flip_badge)
         elif mode == "dots":
             main_path, _, _ = dot_matrix_path(main_text, font, fm, size)
             main_path.translate(main_x, float(pad))
@@ -555,6 +626,15 @@ class Renderer:
                 p.drawPath(ghost_path)
             except Exception as exc:
                 store.log(f"segments 残影跳过: {exc}", "WARN")
+        if dim_path is not None and dim_path.elementCount():
+            # 没选中的那枚上下午角标：主色降到 18%，跟「未点亮的段」一个观感，
+            # 既不抢眼，又能让人看出 A / P 是一对
+            try:
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(QBrush(_qcolor(color, 0.18)))
+                p.drawPath(dim_path)
+            except Exception as exc:
+                store.log(f"segments 角标跳过: {exc}", "WARN")
 
         # 2) shadow / glow —— 文字下方
         for d in decs:

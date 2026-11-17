@@ -9,18 +9,39 @@ WEEKDAY_CN = ("星期一", "星期二", "星期三", "星期四", "星期五", "
 WEEKDAY_SHORT = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 FORMAT_PRESETS = (
-    ("HH:mm:ss", "24 小时 · 时分秒"),
-    ("HH:mm", "24 小时 · 时分"),
-    ("hh:mm tt", "12 小时 · 上下午"),
-    ("HH:mm:ss dddd", "带星期"),
+    # 标签里不写「24 小时 / 12 小时」——那是下面那个开关的职责，写在这里会和
+    # 开关打架：下拉说「24 小时」，开关却开着 12 小时制，用户不知道谁说了算
+    ("HH:mm:ss", "时分秒"),
+    ("HH:mm", "时分"),
+    ("hh:mm tt", "时分 + 上下午"),
+    ("HH:mm:ss dddd", "时分秒 + 星期"),
     ("yyyy-MM-dd HH:mm:ss", "完整日期时间"),
 )
 
 
 def _tokens(now: datetime, hour12: bool = False) -> dict[str, str]:
+    """时间标记表。
+
+    `hour12` 是总开关，打开时压过格式串里的标记选择：HH / H / hh / h 一律
+    输出 12 小时值。这样拨开关必定有可见变化，不会出现「格式串写了 hh:mm tt
+    就再也关不掉 12 小时」的僵局。
+
+    关闭时不改写任何标记，尊重格式串本身的意图 —— `HH:mm` 是 24 小时、
+    `hh:mm tt` 是 12 小时，那本来就是用户挑这个格式时想要的。
+
+    12 小时制下小时一律不补前导零：`6:35` 而不是 `06:35`。中文用户日常看到的
+    钟点就是这么写的，补零反而像是把 24 小时制的写法硬套过来。
+    """
     h24 = now.hour
     h12 = h24 % 12 or 12
-    hour = h12 if hour12 else h24
+    if hour12:
+        # 开关打开：四个小写/大写标记全部让位给 12 小时值，且不补前导零 ——
+        # 12 小时制的钟点写作 6:35，不是 06:35
+        big_fat = big_thin = small_fat = small_thin = str(h12)
+    else:
+        # 开关关闭：尊重格式串本身 —— HH / hh 补零，H / h 不补零
+        big_fat, big_thin = f"{h24:02d}", str(h24)
+        small_fat, small_thin = f"{h12:02d}", str(h12)
     ampm = "AM" if h24 < 12 else "PM"
     return {
         "yyyy": f"{now.year:04d}",
@@ -31,10 +52,10 @@ def _tokens(now: datetime, hour12: bool = False) -> dict[str, str]:
         "ddd": WEEKDAY_SHORT[now.weekday()],
         "dd": f"{now.day:02d}",
         "d": str(now.day),
-        "HH": f"{hour:02d}",
-        "H": str(hour),
-        "hh": f"{h12:02d}",
-        "h": str(h12),
+        "HH": big_fat,
+        "H": big_thin,
+        "hh": small_fat,
+        "h": small_thin,
         "mm": f"{now.minute:02d}",
         "m": str(now.minute),
         "ss": f"{now.second:02d}",

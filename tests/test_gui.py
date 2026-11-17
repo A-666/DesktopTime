@@ -287,6 +287,56 @@ class TestRenderer(unittest.TestCase):
                   if img.pixelColor(x, y).alpha() > 24)
         self.assertGreater(ink, 50)
 
+    def test_segments_12h_uses_badge_not_blank_gap(self):
+        """七段码画不出 AM / PM，12 小时制要换成角标，不能留一截空白。
+
+        旧行为：` PM` 三个字符各占 0.5H 的 blank 单元，屏幕右侧凭空多出一大块
+        空洞（实测同一时刻比 24 小时制宽出 80 多像素），看着像时间被截断了。
+        现在剥离后缀、右侧画一枚小号 A / P 角标，宽度应和 24 小时制基本持平。
+        """
+        pack = stylepack.get_builtin("lcd")
+        when = datetime(2026, 11, 17, 18, 40, 51)
+
+        def width_of(hour12: bool) -> int:
+            cfg = defaults()
+            cfg["style"].update({"preset": "lcd", "size": 64})
+            cfg["time"].update({"format": "HH:mm:ss", "hour12": hour12, "showSeconds": True})
+            return Renderer().render(when, cfg, pack, 0).width()
+
+        # 24 小时制多一位数字，12 小时制多一组角标，两者宽度应该很接近
+        self.assertLess(abs(width_of(True) - width_of(False)), 40)
+
+    def test_flip_12h_uses_text_badge(self):
+        """翻页卡也画不出 AM / PM：后缀要换成右侧小字，不能留出一片空地。
+
+        旧行为下 ` PM` 被拆成三个 0.5 卡宽的 blank 单元，12 小时制反而比
+        24 小时制还宽（多条空白 + 少一位数字），样式里的分隔线也跟着空跑过去。
+        """
+        pack = stylepack.get_builtin("flip")
+        when = datetime(2026, 11, 17, 18, 40, 51)
+
+        def width_of(hour12: bool) -> int:
+            cfg = defaults()
+            cfg["style"].update({"preset": "flip", "size": 64})
+            cfg["time"].update({"format": "HH:mm:ss", "hour12": hour12, "showSeconds": True})
+            return Renderer().render(when, cfg, pack, 0).width()
+
+        # 12 小时制少一位数字，只多一枚小字角标，总宽必须反而更窄
+        self.assertLess(width_of(True), width_of(False))
+
+    def test_segments_12h_badge_is_inked(self):
+        """角标必须真的画出来 —— 只剩数字的话，12 小时制就分不清上下午了。"""
+        pack = stylepack.get_builtin("lcd")
+        cfg = defaults()
+        cfg["style"].update({"preset": "lcd", "size": 64})
+        cfg["time"].update({"format": "HH:mm:ss", "hour12": True, "showSeconds": True})
+        img = Renderer().render(datetime(2026, 11, 17, 18, 40, 51), cfg, pack, 0)
+        # 角标挂在最右侧；数字区不会有墨迹落到最后 1/8 宽度里
+        right_edge = img.width() - max(1, img.width() // 8)
+        ink = sum(1 for y in range(img.height()) for x in range(right_edge, img.width())
+                  if img.pixelColor(x, y).alpha() > 24)
+        self.assertGreater(ink, 10)
+
 
 class TestControllerAndUI(unittest.TestCase):
     def setUp(self):

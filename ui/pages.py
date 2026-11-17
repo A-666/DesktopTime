@@ -218,7 +218,9 @@ class Page02Time(BasePage):
         self.custom.setPlaceholderText("自定义格式串，例如  HH:mm:ss dddd")
         self.custom.textChanged.connect(lambda t: self.c.set("time.custom", t))
         card.add(self.custom)
-        self.lay.addWidget(Hint("可用标记：HH / H 小时，mm 分，ss 秒，yyyy-MM-dd 日期，dddd 星期，tt 上下午。"))
+        self.lay.addWidget(Hint("可用标记：HH / H 小时（hh / h 为 12 小时制），mm 分，ss 秒，"
+                                "yyyy-MM-dd 日期，dddd 星期，tt 上下午（AM / PM）。"
+                                "打开下面的「12 小时制」会接管所有小时标记。"))
 
         row = Card()
         row.add(SectionTitle("附加内容"))
